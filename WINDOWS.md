@@ -55,4 +55,3 @@ npm run dev
 
 - `npm run dev` 会自动拉起 SDK 桥（默认 http://127.0.0.1:8792/sdk）。
 - 如果本地还有旧的 `.dev.vars`，首次启动会把其中的 `ENCRYPTION_KEY` 导入数据库，然后可以删掉该文件。
-- 本包不含 `node_modules` 和 macOS 桌面 App，请在 Windows 上重新 `npm install`。

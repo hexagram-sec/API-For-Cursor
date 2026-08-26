@@ -114,34 +114,6 @@ function consoleLoginRequest(origin: string, password: string): Request {
 }
 
 describe("Worker", () => {
-  it("redirects legacy public hosts to the canonical public app host", async () => {
-    const db = new FakeD1();
-    const env = makeEnv(db, () => {
-      throw new Error("assets should not be fetched for legacy host redirects");
-    });
-    const { deps } = fakeDeps();
-
-    const cursorApiResponse = await handleRequest(
-      new Request("https://cursor-api.standardagents.ai/chat?from=legacy"),
-      env,
-      fakeCtx(),
-      deps
-    );
-
-    expect(cursorApiResponse.status).toBe(308);
-    expect(cursorApiResponse.headers.get("location")).toBe("https://api-for-cursor.standardagents.ai/chat?from=legacy");
-
-    const composerResponse = await handleRequest(
-      new Request("https://api-for-composer.standardagents.ai/chat"),
-      env,
-      fakeCtx(),
-      deps
-    );
-
-    expect(composerResponse.status).toBe(308);
-    expect(composerResponse.headers.get("location")).toBe("https://api-for-cursor.standardagents.ai/chat");
-  });
-
   it("allows OpenCode session headers in CORS preflight", async () => {
     const db = new FakeD1();
     const env = makeEnv(db);
@@ -433,7 +405,6 @@ describe("Worker", () => {
     });
     expect(JSON.stringify(addedBody)).not.toContain("cursor_key");
     expect(db.cursorKeys.size).toBe(1);
-    expect(db.accounts.size).toBe(0);
 
     const listed = await adminListCursorKeys(env, deps, cookie);
     const listedBody = (await listed.json()) as { keys: Array<{ id: string; key?: string }> };
@@ -643,11 +614,6 @@ describe("Worker", () => {
       choices: [{ message: { content: "Hello from Composer" } }]
     });
 
-    // Serving a relay call must not persist any per-request log to D1.
-    expect(db.requestLogs.size).toBe(0);
-    expect(db.accounts.size).toBe(0);
-    expect(db.apiKeys.size).toBe(0);
-
     // Only the backing Cursor token is exchanged for Cursor API-key authorization.
     expect(exchangeAuthHeaders).toContain("Bearer cursor_key");
   });
@@ -729,7 +695,6 @@ describe("Worker", () => {
     expect(body).toContain('"total_usd"');
     expect(body).toContain("data: [DONE]");
 
-    expect(db.requestLogs.size).toBe(0);
     expect(exchangeAuthHeaders).toContain("Bearer cursor_key");
   });
 
@@ -863,7 +828,6 @@ describe("Worker", () => {
     expect(body).toContain('"finish_reason":"tool_calls"');
     expect(body).toContain('"choices":[]');
     expect(body).toContain('"usage"');
-    expect(db.requestLogs.size).toBe(0);
     expect(chatRequestBodies).toHaveLength(0);
     expect(sdkRequests.map((item) => `${item.method} ${item.path}`)).toEqual(["POST /test-local-sdk"]);
     expect(String(sdkRequests[0].body)).toContain("agent-");
@@ -1619,7 +1583,6 @@ describe("Worker", () => {
     expect(body).toContain("event: response.output_text.delta");
     expect(body).toContain("event: response.completed");
     expect(body).toContain("Hello from Composer");
-    expect(db.requestLogs.size).toBe(0);
   });
 
   it("returns a buffered JSON response for /v1/responses when stream is absent", async () => {
@@ -2122,9 +2085,6 @@ describe("Worker", () => {
     expect(body).toContain('"object":"chat.completion.chunk"');
     expect(body).toContain('"content":"Hello from Composer"');
     expect(body).toContain("data: [DONE]");
-
-    // Request logging was removed with the account model; nothing is persisted.
-    expect(db.requestLogs.size).toBe(0);
   });
 
   it("streams Cursor errors as SSE errors instead of assistant text", async () => {

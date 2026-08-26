@@ -6,19 +6,10 @@ export async function sha256Hex(value: string): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export async function accountIdForCursor(userId: string | null, email: string | null, fallback: string): Promise<string> {
-  const basis = userId ? `cursor-user:${userId}` : email ? `cursor-email:${email.toLowerCase()}` : `cursor-key:${fallback}`;
-  return `acct_${(await sha256Hex(basis)).slice(0, 24)}`;
-}
-
 export function randomToken(prefix: string, bytes = 32): string {
   const values = new Uint8Array(bytes);
   crypto.getRandomValues(values);
   return `${prefix}_${base64UrlEncode(values)}`;
-}
-
-export function apiKeyPrefix(apiKey: string): string {
-  return apiKey.slice(0, 14);
 }
 
 export async function encryptText(plaintext: string, secret: string): Promise<{ ciphertext: string; iv: string }> {

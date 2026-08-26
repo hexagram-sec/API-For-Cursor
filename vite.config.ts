@@ -321,10 +321,7 @@ export default defineConfig({
   server: {
     host: stationListen.relayHost,
     port: stationListen.relayPort,
-    strictPort: stationListen.relayPort !== DEFAULT_PORT,
-    watch: {
-      ignored: ["**/macos/**"]
-    }
+    strictPort: stationListen.relayPort !== DEFAULT_PORT
   },
   build: {
     sourcemap: true,

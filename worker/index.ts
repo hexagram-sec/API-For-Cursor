@@ -106,9 +106,6 @@ const defaultDeps: Deps = {
   randomUUID: () => crypto.randomUUID()
 };
 
-const LEGACY_PUBLIC_HOSTS = new Set(["api-for-composer.standardagents.ai", "cursor-api.standardagents.ai"]);
-const CANONICAL_PUBLIC_HOST = "api-for-cursor.standardagents.ai";
-
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     return handleRequest(request, env, ctx, defaultDeps);
@@ -117,8 +114,6 @@ export default {
 
 export async function handleRequest(request: Request, env: Env, ctx: ExecutionContext, deps: Deps = defaultDeps): Promise<Response> {
   const url = new URL(request.url);
-  const legacyHostRedirect = redirectLegacyCursorApiHost(url);
-  if (legacyHostRedirect) return legacyHostRedirect;
   if (request.method === "OPTIONS") return optionsResponse();
 
   const config = await ensureAppConfig(env);
@@ -165,13 +160,6 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
   } catch (error) {
     return errorResponse(error);
   }
-}
-
-function redirectLegacyCursorApiHost(url: URL): Response | null {
-  if (!LEGACY_PUBLIC_HOSTS.has(url.hostname)) return null;
-  const target = new URL(url.toString());
-  target.hostname = CANONICAL_PUBLIC_HOST;
-  return Response.redirect(target.toString(), 308);
 }
 
 function staleViteAssetFallbackPath(pathname: string): string | null {

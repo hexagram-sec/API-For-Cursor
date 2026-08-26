@@ -14,7 +14,7 @@ describe("crypto helpers", () => {
     await expect(decryptText(encrypted.ciphertext, encrypted.iv, secret)).resolves.toBe("cursor_key_123");
   });
 
-  it("generates proxy keys with the expected prefix", () => {
-    expect(randomToken("cmp")).toMatch(/^cmp_[A-Za-z0-9_-]+$/);
+  it("generates relay keys with the expected prefix", () => {
+    expect(randomToken("sk")).toMatch(/^sk_[A-Za-z0-9_-]+$/);
   });
 });

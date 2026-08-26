@@ -568,9 +568,10 @@ async function handleOpenAiRoute(
         });
   const id = `${route.kind === "chat" ? "chatcmpl" : "resp"}_${crypto.randomUUID().replaceAll("-", "")}`;
   const created = Math.floor(deps.now().getTime() / 1000);
-  const sdkSessionKey = route.kind === "responses"
-    ? previousState?.sdkSessionKey || sessionAffinity(request) || id
-    : sessionAffinity(request);
+  // OpenAI clients send the full transcript and usually omit session headers.
+  // Reusing a shared SDK agent ("default") mixed every conversation on the same key.
+  const sdkSessionKey =
+    (route.kind === "responses" ? previousState?.sdkSessionKey : undefined) || sessionAffinity(request) || id;
   const completionRoute: CompletionRoute =
     route.kind === "chat" ? { ...route, kind: "chat" } : { ...route, kind: "responses" };
 
@@ -718,7 +719,7 @@ async function handleSdkPreparedOpenAiRoute(input: {
   const completion = await createCursorSdkCompletion(input.env, input.deps, input.auth.cursorApiKey, {
     prompt: input.prepared.prompt,
     model: input.prepared.cursorModel,
-    sessionKey: input.sdkSessionKey || sessionAffinity(input.request),
+    sessionKey: input.sdkSessionKey || sessionAffinity(input.request) || input.id,
     sessionOwnerKey: sdkSessionOwner(input.auth),
     workingDirectory: input.prepared.toolContext?.workingDirectory,
     clientTools: input.prepared.tools,
@@ -864,7 +865,7 @@ async function handleOpenCodeSdkChatRoute(
     const completion = await createCursorSdkCompletion(env, deps, auth.cursorApiKey, {
       prompt: prepared.prompt,
       model: prepared.cursorModel,
-      sessionKey: sessionAffinity(request),
+      sessionKey: sessionAffinity(request) || id,
       sessionOwnerKey: sdkSessionOwner(auth),
       workingDirectory: prepared.toolContext?.workingDirectory,
       clientTools: prepared.tools,

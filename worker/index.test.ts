@@ -920,6 +920,39 @@ describe("Worker", () => {
     expect(String(sdkRequests[0].body)).not.toContain("Switched to agent mode successfully");
   });
 
+  it("does not reuse an OpenCode SDK agent when session affinity is omitted", async () => {
+    const db = new FakeD1();
+    const env = makeEnv(db);
+    const { deps, sdkRequests } = fakeDeps();
+    const relayKey = await seedRelayKey(env, deps);
+
+    for (const content of ["Topic A", "Topic B"]) {
+      const response = await handleRequest(
+        new Request("https://composer.test/opencodev2/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${relayKey}`
+          },
+          body: JSON.stringify({
+            model: "composer-2.5",
+            messages: [{ role: "user", content }]
+          })
+        }),
+        env,
+        fakeCtx(),
+        deps
+      );
+      expect(response.status).toBe(200);
+      await response.json();
+    }
+
+    expect(sdkRequests).toHaveLength(2);
+    const firstAgent = /agent-[0-9a-f-]{36}/.exec(String(sdkRequests[0].body))?.[0];
+    expect(firstAgent).toBeTruthy();
+    expect(String(sdkRequests[1].body)).not.toContain(firstAgent!);
+  });
+
   it("streams local SDK output from one run", async () => {
     const db = new FakeD1();
     const env = makeEnv(db);
@@ -1680,6 +1713,75 @@ describe("Worker", () => {
       apiKey: "cursor_key",
       model: "composer-2.5"
     });
+  });
+
+  it("isolates SDK agents for chat completions that omit session affinity", async () => {
+    const db = new FakeD1();
+    const env = { ...makeEnv(db), CURSOR_SDK_BRIDGE_URL: "https://bridge.test/sdk" };
+    const { deps, sdkRequests } = fakeDeps();
+    const relayKey = await seedRelayKey(env, deps);
+
+    for (const content of ["Topic A: explain rust ownership", "Topic B: write a python fizzbuzz"]) {
+      const response = await handleRequest(
+        new Request("https://composer.test/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${relayKey}`
+          },
+          body: JSON.stringify({
+            model: "composer-2.5",
+            messages: [{ role: "user", content }]
+          })
+        }),
+        env,
+        fakeCtx(),
+        deps
+      );
+      expect(response.status).toBe(200);
+      await response.json();
+    }
+
+    expect(sdkRequests).toHaveLength(2);
+    const firstKey = (sdkRequests[0].body as { sessionKey?: string }).sessionKey;
+    const secondKey = (sdkRequests[1].body as { sessionKey?: string }).sessionKey;
+    expect(firstKey).toBeTruthy();
+    expect(secondKey).toBeTruthy();
+    expect(firstKey).not.toBe(secondKey);
+  });
+
+  it("reuses the SDK agent when chat completions share a session-affinity header", async () => {
+    const db = new FakeD1();
+    const env = { ...makeEnv(db), CURSOR_SDK_BRIDGE_URL: "https://bridge.test/sdk" };
+    const { deps, sdkRequests } = fakeDeps();
+    const relayKey = await seedRelayKey(env, deps);
+
+    for (const content of ["Say hello", "Say hello again"]) {
+      const response = await handleRequest(
+        new Request("https://composer.test/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${relayKey}`,
+            "x-session-affinity": "chat-session-one"
+          },
+          body: JSON.stringify({
+            model: "composer-2.5",
+            messages: [{ role: "user", content }]
+          })
+        }),
+        env,
+        fakeCtx(),
+        deps
+      );
+      expect(response.status).toBe(200);
+      await response.json();
+    }
+
+    expect(sdkRequests).toHaveLength(2);
+    expect((sdkRequests[1].body as { sessionKey?: string }).sessionKey).toBe(
+      (sdkRequests[0].body as { sessionKey?: string }).sessionKey
+    );
   });
 
   it("reuses the SDK session for standard Responses continuations", async () => {

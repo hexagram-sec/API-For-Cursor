@@ -113,7 +113,7 @@ export async function createCursorSdkCompletion(
 ): Promise<CursorSdkCompletion> {
   const now = deps.now();
   pruneSessions(now.getTime());
-  const sessionIdentity = await sdkSessionIdentity(apiKey, input.sessionKey || "default", input.sessionOwnerKey);
+  const sessionIdentity = await sdkSessionIdentity(apiKey, input.sessionKey || deps.randomUUID(), input.sessionOwnerKey);
   const session = sdkSessions.get(sessionIdentity.id) ?? (await readPersistedSdkSession(env, sessionIdentity.id, now.getTime()));
   const agentId = session?.agentId || newLocalSdkAgentId(deps.randomUUID());
   const runId = newLocalSdkRunId(deps.randomUUID());

@@ -7,11 +7,11 @@
   "description": "OpenAI-compatible Chat Completions and Responses API for Cursor.",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/standardagents/composer-api.git"
+    "url": "git+https://github.com/hexagram-sec/API-For-Cursor.git"
   },
-  "homepage": "https://github.com/standardagents/composer-api#readme",
+  "homepage": "https://github.com/hexagram-sec/API-For-Cursor#readme",
   "bugs": {
-    "url": "https://github.com/standardagents/composer-api/issues"
+    "url": "https://github.com/hexagram-sec/API-For-Cursor/issues"
   },
   "scripts": {
     "dev": "vite",

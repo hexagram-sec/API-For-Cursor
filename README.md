@@ -1,39 +1,47 @@
 # API for Cursor
 
-Local OpenAI-compatible `chat.completions` and `responses` endpoints backed by Cursor models (Composer 2.5, Grok 4.6, and more).
+Windows 本机的 Cursor 模型中继：提供 OpenAI 兼容的 `/v1` 接口，并带一套中文控制台（对话、实验室探测、密钥与访问日志）。数据写在本机 `%APPDATA%\api-for-cursor\`，不经过原站托管服务。
 
-This repository is the **Windows** app: a local Worker + Vite console + Cursor SDK bridge, packaged as an exe. Data stays on the machine (`%APPDATA%\api-for-cursor\`).
+![PROBE 实验室：并行探测模型是否可用](image.png)
 
-## Supported endpoints
+上图是 **实验室**。选定工作端口后，控制台会并发调用 `/v1/chat/completions`，检查模型是否真正返回内容。截图中 35 个模型全部 HTTP 200，回复为 `pong`。
 
-- `POST /v1/chat/completions`
-- `POST /v1/responses`
-- `GET /v1/models`
+## 中继控制台
 
-## Models
+侧栏分组：
 
-- `composer-2.5`
-- `composer-2.5-fast`
-- `grok-4.6`
-- `grok-4.6-fast`
-- `grok-4.5`
-- `grok-4.5-fast`
+| 分组 | 页面 | 作用 |
+| --- | --- | --- |
+| 使用 | 对话 | 用当前工作端口聊天 |
+| 使用 | 实验室 | 并行探测 `/v1/chat/completions`，看延迟和回复 |
+| 密钥 | Cursor Token | 保存 Cursor Dashboard 里的 API Key |
+| 密钥 | 中转 Key | 发给客户端的 `sk-...` 中继密钥 |
+| 系统 | 设置 | 监听地址、控制台密码、SDK 桥 |
+| 系统 | 访问日志 | `/v1` 与管理接口的请求记录 |
 
-## Usage
+对话和实验室共用侧栏底部的 **工作端口**（中转 Key）。实验室可改提示词、并发数，对勾选模型执行「探测所选」，结果里有状态、HTTP 码、耗时和正文摘要。
 
-Start the app (or `npm run dev`). The default base URL is:
+Cursor Token 从 [Cursor Dashboard → Integrations](https://cursor.com/dashboard) 创建，只存在本机，不要提交到 Git。
+
+## 接口
+
+默认基址：
 
 ```txt
 http://127.0.0.1:8787/v1
 ```
 
-Point any OpenAI-compatible client at the local base URL. Authenticate with a relay key (`sk-...`) from the console, or with a Cursor API key as Bearer. Paste Cursor keys in the app (Dashboard → Integrations → API Keys); do not commit them.
+- `GET /v1/models`
+- `POST /v1/chat/completions`
+- `POST /v1/responses`
+
+客户端用中转 Key（`sk-...`）或 Cursor API Key 作为 Bearer。模型 id 以 `/v1/models` 为准，常见包括 `composer-2.5`、`composer-2.5-fast`、`grok-4.6`、`grok-4.5` 以及账号下其它 Cursor 模型。
 
 ```ts
 import OpenAI from "openai";
 
 const client = new OpenAI({
-  apiKey: "local",
+  apiKey: "sk-你的中转Key",
   baseURL: "http://127.0.0.1:8787/v1"
 });
 
@@ -45,73 +53,60 @@ const completion = await client.chat.completions.create({
 
 ```bash
 curl http://127.0.0.1:8787/v1/chat/completions \
-  -H "Authorization: Bearer local" \
+  -H "Authorization: Bearer sk-你的中转Key" \
   -H "Content-Type: application/json" \
   -d '{"model":"composer-2.5","messages":[{"role":"user","content":"Hello"}]}'
 ```
 
-## Windows package
+支持文本和图片输入、流式/非流式输出。图片可用 Chat Completions 的 `image_url` 或 Responses 的 `input_image`，单张不超过 1MB。
+
+下列 OpenAI 能力此路径不提供，请求会被拒绝：`n > 1`、`logprobs`、音频输出、Responses 上的 OpenAI function/tool、后台 Responses 任务。Token 用量按字符估算；Composer 2.5 与列出的 Grok 模型会按 Cursor 公开单价估算 `usage.cost`。
+
+OpenCode / Codex 等 Agent 把 base URL 指到本机 `/v1` 即可。控制台里也有 Agent 安装入口。
+
+## Windows 安装包
+
+需要 64 位 [Node.js 22](https://nodejs.org/)。
 
 ```bat
 npm install
 npm run dist:win
 ```
 
-Outputs land in `dist-win/`. See [WINDOWS.md](WINDOWS.md).
+产物在 `dist-win/`：
 
-## Local development
+- `API for Cursor-0.1.0-win.zip`：便携版，解压后运行 `API for Cursor.exe`
+- `API for Cursor-0.1.0-setup.exe`：当前用户安装
+- `win-unpacked\API for Cursor.exe`：未打包目录，开发机可直接打开
 
-```bash
+未签名时 SmartScreen 可能拦截，选「仍要运行」。详细说明见 [WINDOWS.md](WINDOWS.md)。
+
+只开开发窗口、不打包：
+
+```bat
+npm run desktop
+```
+
+## 本地开发
+
+```bat
 npm install
 npm run db:migrate:local
 npm run dev
 ```
 
-Open http://127.0.0.1:5173
+浏览器打开 http://127.0.0.1:5173
 
-Business config (encryption key, SDK listen address, upstream versions) lives in D1. The encryption key is generated on first request if the database does not already have one. You do **not** need a `.dev.vars` file for local `npm run dev`.
+`npm run dev` 会同时拉起 Cursor SDK 本地桥（默认 `http://127.0.0.1:8792/sdk`）。监听地址可在 **设置** 里改。单独跑桥：
 
-If you still have an old `.dev.vars`, the first start will import `ENCRYPTION_KEY` and other values into D1, then ignore the file. After that you can delete `.dev.vars`. Do not rotate `ENCRYPTION_KEY` once Cursor tokens exist in the database.
-
-Optional first-run console password can still be set as `CONSOLE_PASSWORD` in the environment; after the first login the hash is stored in D1 and can be changed from 设置.
-
-Listen host/port for the SDK bridge and the Vite relay can be changed on the settings page. Access logs for `/v1` and `/api/admin` are under 访问日志.
-
-`npm run dev` starts the SDK local-agent bridge automatically (default http://127.0.0.1:8792/sdk). To run it yourself:
-
-```bash
+```bat
 npm run sdk:opencode-bridge
 ```
 
-The bridge process also accepts `CURSOR_SDK_BRIDGE_RUN_TIMEOUT_MS`; the default is `180000`.
+加密密钥在第一次请求时写入 D1，之后不要轮换。不必准备 `.dev.vars`；若还有旧文件，首次启动会把 `ENCRYPTION_KEY` 导入数据库，然后可以删掉。可选环境变量 `CONSOLE_PASSWORD` 用于第一次给控制台设密码，之后在设置页修改。
 
-## Compatibility notes
+访问日志在 **系统 → 访问日志**。调试启动可设 `STATION_DEBUG=1`，或看 `%APPDATA%\api-for-cursor\station.log`。
 
-This project supports text and image input, non-streaming and streaming output, JSON-output prompt constraints, and the common SDK response shapes. Image inputs can be sent as Chat Completions `image_url` parts or Responses `input_image` parts; each resolved image must be 1MB or smaller.
+## 仓库
 
-These OpenAI features are intentionally rejected because Cursor does not expose equivalent OpenAI controls through this path:
-
-- `n` greater than `1`
-- `logprobs` and `top_logprobs`
-- audio output
-- OpenAI function/tool calls on the Responses API
-- background Responses API jobs
-
-Token usage is estimated from character counts because Cursor's stream does not return OpenAI token accounting on this path. For Composer 2.5 and the listed Grok models, `usage.cost` is estimated from Cursor's published per-million-token pricing.
-
-## OpenCode
-
-![Composer 2.5 in OpenCode](public/opencode-composer-2-5.webp)
-
-Use **Agent Setup** to install the local OpenCode provider. The configured provider points at the local base URL.
-
-## Research sources
-
-- Cursor SDK package: `@cursor/sdk@1.0.13`
-- Cursor SDK TypeScript docs: https://cursor.com/docs/api/sdk/typescript
-- Cursor Composer 2.5 changelog: https://cursor.com/changelog/composer-2-5
-- Cursor Grok 4.6 docs: https://cursor.com/docs/models/grok-4-6
-- Cursor Grok 4.5 docs: https://cursor.com/docs/models/grok-4-5
-- OpenAI Chat Completions reference: https://developers.openai.com/api/docs/api-reference/chat
-- OpenAI Responses reference: https://developers.openai.com/api/docs/api-reference/responses
-- OpenAI migration guide: https://developers.openai.com/api/docs/guides/migrate-to-responses
+https://github.com/hexagram-sec/API-For-Cursor

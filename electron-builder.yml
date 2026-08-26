@@ -1,0 +1,35 @@
+appId: ai.standardagents.api-for-cursor
+productName: API for Cursor
+copyright: Copyright © Standard Agents
+asar: true
+npmRebuild: false
+nodeGypRebuild: false
+directories:
+  output: dist-win
+files:
+  - desktop/**/*
+  - "!node_modules/**"
+extraResources:
+  - from: pack/win-runtime
+    to: station
+  - from: pack/win-deps
+    to: station/node_modules
+  - from: tools/node-win-x64
+    to: node
+    filter:
+      - node.exe
+afterPack: scripts/electron-after-pack.cjs
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: zip
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  shortcutName: API for Cursor
+  artifactName: "${productName}-${version}-setup.${ext}"

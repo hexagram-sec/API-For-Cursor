@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/api-for-cursor-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600;700&family=Oxanium:wght@500;600;700&display=swap"
+    />
+    <script>
+      (function () {
+        var allowed = ["station", "ember", "phosphor", "iris", "daylight", "obsidian"];
+        var theme = "station";
+        try {
+          var stored = localStorage.getItem("composer-api-theme");
+          if (stored && allowed.indexOf(stored) !== -1) theme = stored;
+        } catch (e) {}
+        document.documentElement.setAttribute("data-theme", theme);
+        document.documentElement.style.colorScheme = theme === "daylight" ? "light" : "dark";
+      })();
+    </script>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="theme-color" content="#06131a" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="application-name" content="API for Cursor" />
+
+    <title>API for Cursor · 中继控制台</title>
+    <meta name="description" content="基于 Cursor 的 OpenAI 兼容 API 中继控制台。" />
+  </head>
+  <body>
+    <div class="stage" aria-hidden="true">
+      <div class="stage-grid"></div>
+      <div class="stage-fiber"></div>
+      <div class="stage-photon"></div>
+    </div>
+
+    <div id="app"></div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

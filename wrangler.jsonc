@@ -1,0 +1,49 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "composer-api",
+  "main": "worker/index.ts",
+  "account_id": "fd9e24c9339e83e73661475690574340",
+  "compatibility_date": "2026-05-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "cursor-api.standardagents.ai", "custom_domain": true },
+    { "pattern": "api-for-cursor.standardagents.ai", "custom_domain": true },
+    { "pattern": "api-for-cursor.standardagents.ai/*", "zone_name": "standardagents.ai" },
+    { "pattern": "api-for-composer.standardagents.ai", "custom_domain": true },
+    { "pattern": "api-for-composer.standardagents.ai/*", "zone_name": "standardagents.ai" }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "persist": true
+    },
+    "traces": {
+      "enabled": true,
+      "persist": true
+    }
+  },
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "run_worker_first": ["/", "/chat", "/lab", "/console", "/console/*", "/api/*", "/v1/*", "/u/*", "/opencode/*", "/opencodev2/*"]
+  },
+  "vars": {
+    "CURSOR_SDK_BRIDGE_URL": "http://127.0.0.1:8792/sdk"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "composer-api",
+      "database_id": "b21d167a-5e5e-4aa6-aac3-43b65fc604c8",
+      "migrations_dir": "migrations"
+    }
+  ]
+  // Optional first-run import into D1 (then ignored):
+  // CURSOR_BACKEND_BASE_URL / CURSOR_CHAT_ENDPOINT — legacy chat transport.
+  // ENCRYPTION_KEY — imported once if D1 has no encryption_key; later generated or read from D1.
+  // CONSOLE_PASSWORD — first-run bootstrap for the admin console gate; later stored in D1.
+  // CURSOR_SDK_BRIDGE_URL — HTTP URL for the local Node SDK bridge (default http://127.0.0.1:8792/sdk).
+  // CURSOR_SDK_BRIDGE_TOKEN — bearer token shared with the SDK bridge.
+}

@@ -6,6 +6,8 @@ Windows 本机的 Cursor 模型中继：提供 OpenAI 兼容的 `/v1` 接口，�
 
 上图是 **实验室**。选定工作端口后，控制台会并发调用 `/v1/chat/completions`，检查模型是否真正返回内容。截图中 35 个模型全部 HTTP 200，回复为 `pong`。
 
+使用步骤（网页版 / 桌面版、支持的操作系统）见 [操作手册](docs/操作手册.md)。
+
 ## 中继控制台
 
 侧栏分组：
@@ -25,10 +27,10 @@ Cursor Token 从 [Cursor Dashboard → Integrations](https://cursor.com/dashboar
 
 ## 接口
 
-默认基址：
+默认基址（与控制台同一端口，未在设置里改过时）：
 
 ```txt
-http://127.0.0.1:8787/v1
+http://127.0.0.1:5173/v1
 ```
 
 - `GET /v1/models`
@@ -42,7 +44,7 @@ import OpenAI from "openai";
 
 const client = new OpenAI({
   apiKey: "sk-你的中转Key",
-  baseURL: "http://127.0.0.1:8787/v1"
+  baseURL: "http://127.0.0.1:5173/v1"
 });
 
 const completion = await client.chat.completions.create({
@@ -52,7 +54,7 @@ const completion = await client.chat.completions.create({
 ```
 
 ```bash
-curl http://127.0.0.1:8787/v1/chat/completions \
+curl http://127.0.0.1:5173/v1/chat/completions \
   -H "Authorization: Bearer sk-你的中转Key" \
   -H "Content-Type: application/json" \
   -d '{"model":"composer-2.5","messages":[{"role":"user","content":"Hello"}]}'

@@ -77,8 +77,8 @@ npm run dist:win
 
 产物在 `dist-win/`：
 
-- `API for Cursor-0.1.0-win.zip`：便携版，解压后运行 `API for Cursor.exe`
-- `API for Cursor-0.1.0-setup.exe`：当前用户安装
+- `API for Cursor-0.1.1-win.zip`：便携版，解压后运行 `API for Cursor.exe`
+- `API for Cursor-0.1.1-setup.exe`：当前用户安装
 - `win-unpacked\API for Cursor.exe`：未打包目录，开发机可直接打开
 
 未签名时 SmartScreen 可能拦截，选「仍要运行」。详细说明见 [WINDOWS.md](WINDOWS.md)。

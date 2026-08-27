@@ -1676,8 +1676,11 @@ describe("Worker", () => {
     expect(sdkRequests.map((item) => `${item.method} ${item.path}`)).toEqual(["POST /sdk"]);
     expect(sdkRequests[0].body).toMatchObject({
       apiKey: "cursor_key",
-      model: "composer-2.5"
+      model: "composer-2.5",
+      prompt: "Say hello",
+      promptAlreadyPrepared: true
     });
+    expect((sdkRequests[0].body as { tools?: unknown }).tools).toBeUndefined();
   });
 
   it("uses the SDK bridge for standard Chat Completions when configured", async () => {
@@ -1711,8 +1714,13 @@ describe("Worker", () => {
     expect(sdkRequests.map((item) => `${item.method} ${item.path}`)).toEqual(["POST /sdk"]);
     expect(sdkRequests[0].body).toMatchObject({
       apiKey: "cursor_key",
-      model: "composer-2.5"
+      model: "composer-2.5",
+      prompt: "Say hello",
+      promptAlreadyPrepared: true
     });
+    expect((sdkRequests[0].body as { tools?: unknown }).tools).toBeUndefined();
+    expect(String((sdkRequests[0].body as { prompt?: string }).prompt)).not.toContain("You are serving an OpenAI-compatible");
+    expect(String((sdkRequests[0].body as { prompt?: string }).prompt)).not.toContain("switch_mode");
   });
 
   it("isolates SDK agents for chat completions that omit session affinity", async () => {
@@ -2108,7 +2116,12 @@ describe("Worker", () => {
     });
     expect(chatRequestBodies).toHaveLength(0);
     expect(sdkRequests.map((item) => `${item.method} ${item.path}`)).toEqual(["POST /sdk"]);
-    expect((sdkRequests[0].body as { tools?: unknown[] }).tools).toEqual([
+    const sdkBody = sdkRequests[0].body as { prompt?: string; promptAlreadyPrepared?: boolean; tools?: unknown[] };
+    expect(sdkBody.prompt).toContain("Say hello");
+    expect(sdkBody.prompt).toContain('"name":"glob"');
+    expect(sdkBody.prompt).not.toContain("CLIENT TOOL INVENTORY");
+    expect(sdkBody.promptAlreadyPrepared).toBe(true);
+    expect(sdkBody.tools).toEqual([
       {
         name: "glob",
         parameters: { type: "object", properties: { pattern: { type: "string" } }, required: ["pattern"] }

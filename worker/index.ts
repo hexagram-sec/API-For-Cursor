@@ -51,6 +51,8 @@ import {
   prepareChatRequest,
   prepareOpencodeSdkChatRequest,
   prepareResponsesRequest,
+  prepareSdkNativeChatRequest,
+  prepareSdkNativeResponsesRequest,
   responseCreatedEvents,
   responseDeltaEvent,
   responseDoneEvents,
@@ -559,21 +561,29 @@ async function handleOpenAiRoute(
   const previousResponseId = route.kind === "responses" ? previousResponseIdFromBody(body) : undefined;
   const previousState = previousResponseId && responseOwner ? getResponseState(responseOwner, previousResponseId) : undefined;
   if (previousResponseId && !previousState) throw new HttpError("Response not found", 404, "not_found");
+  const completionRoute: CompletionRoute =
+    route.kind === "chat" ? { ...route, kind: "chat" } : { ...route, kind: "responses" };
+  const useSdk = shouldUseSdkForPreparedRoute(env, completionRoute);
   const prepared =
     route.kind === "chat"
-      ? prepareChatRequest(body, cursorModel, { forceAgentMode: route.surface === "opencode" })
-      : prepareResponsesRequest(body, cursorModel, {
-          previousOutput: previousState?.outputItems,
-          previousInputItems: previousState?.inputItems
-        });
+      ? useSdk
+        ? prepareSdkNativeChatRequest(body, cursorModel)
+        : prepareChatRequest(body, cursorModel, { forceAgentMode: route.surface === "opencode" })
+      : useSdk
+        ? prepareSdkNativeResponsesRequest(body, cursorModel, {
+            previousOutput: previousState?.outputItems,
+            previousInputItems: previousState?.inputItems
+          })
+        : prepareResponsesRequest(body, cursorModel, {
+            previousOutput: previousState?.outputItems,
+            previousInputItems: previousState?.inputItems
+          });
   const id = `${route.kind === "chat" ? "chatcmpl" : "resp"}_${crypto.randomUUID().replaceAll("-", "")}`;
   const created = Math.floor(deps.now().getTime() / 1000);
   // OpenAI clients send the full transcript and usually omit session headers.
   // Reusing a shared SDK agent ("default") mixed every conversation on the same key.
   const sdkSessionKey =
     (route.kind === "responses" ? previousState?.sdkSessionKey : undefined) || sessionAffinity(request) || id;
-  const completionRoute: CompletionRoute =
-    route.kind === "chat" ? { ...route, kind: "chat" } : { ...route, kind: "responses" };
 
   // Request logging was tied to the removed account model; completions run
   // without persisting per-request rows now.
@@ -723,7 +733,8 @@ async function handleSdkPreparedOpenAiRoute(input: {
     sessionOwnerKey: sdkSessionOwner(input.auth),
     workingDirectory: input.prepared.toolContext?.workingDirectory,
     clientTools: input.prepared.tools,
-    requiresLocalTool: input.prepared.requiresLocalTool,
+    requiresLocalTool: false,
+    promptAlreadyPrepared: true,
     allowToolCall: (toolCall) => {
       if (!input.prepared.tools.length) return "No client tool inventory was available for this request.";
       const toolCalls = toOpenAiToolCalls({

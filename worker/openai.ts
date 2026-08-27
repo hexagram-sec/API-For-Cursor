@@ -180,6 +180,37 @@ export function prepareChatRequest(body: unknown, cursorModel: { id: string } | 
   };
 }
 
+export function prepareSdkNativeChatRequest(body: unknown, cursorModel: { id: string } | undefined): PreparedRequest {
+  const record = expectRecord(body, "body");
+  const messages = expectArray(record.messages, "messages");
+  validateCommonUnsupported(record);
+  if (record.functions !== undefined) {
+    throw new HttpError("Legacy function calling is not supported by this adapter.", 400, "unsupported_parameter", "functions");
+  }
+
+  const tools = record.tool_choice === "none" ? [] : parseChatTools(record.tools);
+  const toolContext = toolCallContextFromMessages(messages);
+  const model = typeof record.model === "string" && record.model.trim() ? record.model.trim() : "composer-2.5";
+  const { text: messageText, images } = nativeChatMessagesToTextAndImages(messages);
+  const text = nativePromptWithClientTools(messageText, record.tools, record.tool_choice, tools.length > 0);
+  return {
+    model,
+    cursorModel,
+    prompt: { text, mode: tools.length ? "agent" : "ask", ...(images.length ? { images } : {}) },
+    stream: record.stream === true,
+    includeUsage: includeStreamUsage(record),
+    promptChars: text.length,
+    responseMetadata: {
+      temperature: numberOrNull(record.temperature),
+      top_p: numberOrNull(record.top_p)
+    },
+    tools,
+    requiresLocalTool: false,
+    storeResponse: false,
+    toolContext
+  };
+}
+
 export function prepareOpencodeSdkChatRequest(body: unknown, cursorModel: { id: string } | undefined): PreparedRequest {
   const record = expectRecord(body, "body");
   const messages = expectArray(record.messages, "messages");
@@ -300,6 +331,54 @@ export function prepareResponsesRequest(
     },
     tools,
     requiresLocalTool: workspaceMutationRequired && !workspaceMutationDone,
+    previousResponseId,
+    storeResponse,
+    responseInputItems: normalizedResponseInputItems(record.input),
+    toolContext
+  };
+}
+
+export function prepareSdkNativeResponsesRequest(
+  body: unknown,
+  cursorModel: { id: string } | undefined,
+  options: { previousOutput?: unknown[]; previousInputItems?: unknown[] } = {}
+): PreparedRequest {
+  const record = expectRecord(body, "body");
+  validateCommonUnsupported(record);
+  if (record.background === true) {
+    throw new HttpError("background responses are not supported.", 400, "unsupported_parameter", "background");
+  }
+
+  const tools = record.tool_choice === "none" ? [] : parseChatTools(record.tools);
+  const toolContext = toolCallContextFromResponseInput(record.input, record.instructions);
+  const model = typeof record.model === "string" && record.model.trim() ? record.model.trim() : "composer-2.5";
+  const instructions = typeof record.instructions === "string" ? record.instructions.trim() : "";
+  const effectiveInput = responseInputWithPrevious(record.input, options);
+  const { text, images } = nativeResponseInputToTextAndImages(effectiveInput);
+  const parts = [instructions, text].filter((part) => part);
+  const prompt = nativePromptWithClientTools(parts.join("\n\n"), record.tools, record.tool_choice, tools.length > 0) || "[empty]";
+  const previousResponseId = typeof record.previous_response_id === "string" && record.previous_response_id.trim()
+    ? record.previous_response_id.trim()
+    : undefined;
+  const storeResponse = record.store !== false;
+  return {
+    model,
+    cursorModel,
+    prompt: { text: prompt, mode: tools.length ? "agent" : "ask", ...(images.length ? { images } : {}) },
+    stream: record.stream === true,
+    includeUsage: includeStreamUsage(record),
+    promptChars: prompt.length,
+    responseMetadata: {
+      instructions: instructions || null,
+      max_output_tokens: integerOrNull(record.max_output_tokens),
+      temperature: numberOrNull(record.temperature),
+      top_p: numberOrNull(record.top_p),
+      text: isRecord(record.text) ? record.text : { format: { type: "text" } },
+      previous_response_id: previousResponseId || null,
+      store: storeResponse
+    },
+    tools,
+    requiresLocalTool: false,
     previousResponseId,
     storeResponse,
     responseInputItems: normalizedResponseInputItems(record.input),
@@ -1262,6 +1341,74 @@ function responseToolOutputText(output: unknown): string {
   if (typeof output === "string") return output;
   if (output === undefined || output === null) return "";
   return JSON.stringify(output);
+}
+
+function nativePromptWithClientTools(
+  messageText: string,
+  tools: unknown,
+  toolChoice: unknown,
+  includeTools: boolean
+): string {
+  if (!includeTools || tools === undefined) return messageText;
+  const payload: Record<string, unknown> = { tools };
+  if (toolChoice !== undefined) payload.tool_choice = toolChoice;
+  return [messageText, JSON.stringify(payload)].filter(Boolean).join("\n\n");
+}
+
+function nativeChatMessagesToTextAndImages(messages: unknown[]): { text: string; images: CursorImage[] } {
+  const lines: string[] = [];
+  const images: CursorImage[] = [];
+  for (const message of messages) {
+    const item = expectRecord(message, "messages[]");
+    const role = typeof item.role === "string" ? item.role : "user";
+    const { text, images: messageImages } = contentToTextAndImages(item.content, role);
+    images.push(...messageImages);
+    if (messages.length === 1 && role === "user" && !Array.isArray(item.tool_calls)) {
+      return { text: text || "", images };
+    }
+    if (role === "tool") {
+      const toolCallId = typeof item.tool_call_id === "string" ? item.tool_call_id : "";
+      const toolName = typeof item.name === "string" ? item.name : "";
+      const label = [toolName ? `name=${toolName}` : "", toolCallId ? `tool_call_id=${toolCallId}` : ""].filter(Boolean).join(" ");
+      lines.push(`TOOL RESULT${label ? ` (${label})` : ""}: ${text || "[empty]"}`);
+    } else {
+      lines.push(`${role.toUpperCase()}: ${text || "[empty]"}`);
+    }
+    if (Array.isArray(item.tool_calls)) {
+      lines.push(`${role.toUpperCase()} TOOL_CALLS: ${JSON.stringify(item.tool_calls)}`);
+    }
+  }
+  return { text: lines.join("\n\n"), images };
+}
+
+function nativeResponseInputToTextAndImages(input: unknown): { text: string; images: CursorImage[] } {
+  if (typeof input === "string") return { text: input, images: [] };
+  if (!Array.isArray(input)) return { text: input === undefined ? "" : JSON.stringify(input), images: [] };
+  const lines: string[] = [];
+  const images: CursorImage[] = [];
+  for (const item of input) {
+    if (typeof item === "string") {
+      lines.push(item);
+      continue;
+    }
+    const record = expectRecord(item, "input[]");
+    if (record.type === "message" || typeof record.role === "string") {
+      const role = typeof record.role === "string" ? record.role : "user";
+      const content = contentToTextAndImages(record.content, role);
+      lines.push(`${role.toUpperCase()}: ${content.text || "[empty]"}`);
+      images.push(...content.images);
+      continue;
+    }
+    if (record.type === "function_call_output") {
+      lines.push(typeof record.output === "string" ? record.output : JSON.stringify(record.output ?? ""));
+      continue;
+    }
+    if (typeof record.content === "string") {
+      lines.push(record.content);
+      continue;
+    }
+  }
+  return { text: lines.join("\n\n"), images };
 }
 
 function contentToTextAndImages(content: unknown, role: string): { text: string; images: CursorImage[] } {

@@ -3,6 +3,8 @@ import {
   prepareChatRequest,
   prepareOpencodeSdkChatRequest,
   prepareResponsesRequest,
+  prepareSdkNativeChatRequest,
+  prepareSdkNativeResponsesRequest,
   chatCompletionResponse,
   chatUsageChunk,
   responseObject,
@@ -55,6 +57,58 @@ describe("OpenAI compatibility adapter", () => {
     expect(prepared.prompt.text).toContain("USER: What is this?");
     expect(prepared.prompt.text).toContain("within about 50 output tokens");
     expect(prepared.prompt.images).toEqual([{ url: "https://example.com/image.png", dimension: { width: 640, height: 480 } }]);
+  });
+
+  it("forwards native chat content to the SDK without proxy tool instructions", () => {
+    const prepared = prepareSdkNativeChatRequest(
+      {
+        model: "composer-2.5",
+        messages: [
+          { role: "system", content: "Be terse." },
+          { role: "user", content: "What is this?" }
+        ],
+        tools: [{ type: "function", function: { name: "glob" } }]
+      },
+      { id: "composer-2.5" }
+    );
+    expect(prepared.prompt.text).toContain("SYSTEM: Be terse.");
+    expect(prepared.prompt.text).toContain("USER: What is this?");
+    expect(prepared.prompt.text).toContain('"name":"glob"');
+    expect(prepared.prompt.text).not.toContain("You are serving an OpenAI-compatible");
+    expect(prepared.prompt.text).not.toContain("switch_mode");
+    expect(prepared.prompt.text).not.toContain("CLIENT TOOL INVENTORY");
+    expect(prepared.prompt.mode).toBe("agent");
+    expect(prepared.tools).toEqual([{ name: "glob" }]);
+    expect(prepared.requiresLocalTool).toBe(false);
+  });
+
+  it("forwards a single SDK chat user message as the raw prompt", () => {
+    const prepared = prepareSdkNativeChatRequest(
+      {
+        model: "composer-2.5",
+        messages: [{ role: "user", content: "Say hello" }]
+      },
+      { id: "composer-2.5" }
+    );
+    expect(prepared.prompt.text).toBe("Say hello");
+  });
+
+  it("forwards native Responses input to the SDK without tool routing", () => {
+    const prepared = prepareSdkNativeResponsesRequest(
+      {
+        model: "composer-2.5",
+        instructions: "Stay brief.",
+        input: "Say hello",
+        tools: [{ type: "function", name: "glob" }]
+      },
+      { id: "composer-2.5" }
+    );
+    expect(prepared.prompt.text).toContain("Stay brief.");
+    expect(prepared.prompt.text).toContain("Say hello");
+    expect(prepared.prompt.text).toContain('"name":"glob"');
+    expect(prepared.prompt.text).not.toContain("You are serving an OpenAI");
+    expect(prepared.prompt.text).not.toContain("LOCAL TOOL INVENTORY");
+    expect(prepared.tools).toEqual([{ name: "glob" }]);
   });
 
   it("converts Responses input images into Cursor prompts", () => {

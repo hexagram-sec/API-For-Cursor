@@ -108,6 +108,7 @@ export async function createCursorSdkCompletion(
     workingDirectory?: string;
     clientTools?: ClientToolSpec[];
     requiresLocalTool?: boolean;
+    promptAlreadyPrepared?: boolean;
     allowToolCall?: (toolCall: CursorToolCall) => ToolCallDecision;
   }
 ): Promise<CursorSdkCompletion> {
@@ -131,6 +132,7 @@ export async function createCursorSdkCompletion(
     workingDirectory: input.workingDirectory,
     clientTools: input.clientTools,
     requiresLocalTool: input.requiresLocalTool === true,
+    promptAlreadyPrepared: input.promptAlreadyPrepared === true,
     allowToolCall: input.allowToolCall
   };
 
@@ -508,6 +510,7 @@ async function cursorLocalSdkBridgeJson(
     modelId: string;
     workingDirectory?: string;
     clientTools?: ClientToolSpec[];
+    promptAlreadyPrepared?: boolean;
   }
 ): Promise<CursorSdkBridgeOutput> {
   const body = JSON.stringify({
@@ -515,11 +518,12 @@ async function cursorLocalSdkBridgeJson(
     requestId: input.runId,
     model: input.modelId,
     prompt: input.prompt,
+    promptAlreadyPrepared: input.promptAlreadyPrepared === true,
     sessionKey: input.sessionKey || input.agentId,
     ...(sdkBridgeWorkingDirectory(input.workingDirectory)
       ? { workingDirectory: sdkBridgeWorkingDirectory(input.workingDirectory) }
       : {}),
-    tools: bridgeClientTools(input.clientTools)
+    ...(input.clientTools?.length ? { tools: bridgeClientTools(input.clientTools) } : {})
   });
   const bridgeUrl = env.CURSOR_SDK_BRIDGE_URL?.trim();
   if (!bridgeUrl) throw new HttpError("Cursor SDK bridge is not configured", 500, "cursor_sdk_bridge_missing");

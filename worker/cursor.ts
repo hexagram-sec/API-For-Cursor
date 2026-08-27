@@ -324,7 +324,7 @@ async function cursorPublicRaw(
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${apiKey}`);
   headers.set("x-cursor-client-type", "sdk");
-  headers.set("x-cursor-client-version", "composer-api-0.1.0");
+  headers.set("x-cursor-client-version", "composer-api-0.1.1");
   headers.set("x-ghost-mode", "true");
   const response = await deps.fetch(url, { ...init, headers });
   if (!response.ok) {

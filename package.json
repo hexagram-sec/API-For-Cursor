@@ -1,6 +1,6 @@
 {
   "name": "api-for-cursor",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": false,
   "type": "module",
   "main": "desktop/main.cjs",
@@ -23,7 +23,7 @@
     "typecheck": "tsc --noEmit",
     "db:migrate:local": "wrangler d1 migrations apply composer-api --local",
     "desktop": "electron .",
-    "dist:win": "node scripts/prepare-win-pack.mjs && electron-builder --win"
+    "dist:win": "node scripts/prepare-win-pack.mjs && electron-builder --win && node scripts/copy-win-release.mjs"
   },
   "keywords": [
     "cursor",

@@ -125,6 +125,8 @@ function childEnv(stationRoot, nodeBin) {
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.ELECTRON_NO_ASAR;
+  env.CI = "1";
+  env.WRANGLER_SEND_METRICS = "false";
   const extra = [path.join(stationRoot, "node_modules", ".bin")];
   if (nodeBin !== "node") extra.push(path.dirname(nodeBin));
   env.PATH = `${extra.join(path.delimiter)}${path.delimiter}${env.PATH || ""}`;
@@ -151,7 +153,13 @@ function stopServer() {
   killTree(pid);
 }
 
-function runProcess(command, args, opts, timeoutMs) {
+function wranglerMigrationFinished(text) {
+  if (/No migrations to apply/i.test(text)) return true;
+  const last = text.slice(-4000);
+  return /commands executed successfully/i.test(last) && /✅/.test(last) && !/🕒️/.test(last);
+}
+
+function runProcess(command, args, opts, timeoutMs, isComplete) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       ...opts,
@@ -159,23 +167,39 @@ function runProcess(command, args, opts, timeoutMs) {
       stdio: ["ignore", "pipe", "pipe"]
     });
     let stderr = "";
-    child.stdout?.on("data", (d) => appendLog(d));
-    child.stderr?.on("data", (d) => {
-      appendLog(d);
-      stderr += d.toString("utf8");
+    let output = "";
+    let settled = false;
+    const finish = (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (err) reject(err);
+      else resolve();
+    };
+    const succeed = () => {
+      killTree(child.pid);
+      finish();
+    };
+    const onChunk = (chunk) => {
+      const text = chunk.toString("utf8");
+      output += text;
+      appendLog(chunk);
+      if (isComplete?.(output)) succeed();
+    };
+    child.stdout?.on("data", onChunk);
+    child.stderr?.on("data", (chunk) => {
+      stderr += chunk.toString("utf8");
+      onChunk(chunk);
     });
     const timer = setTimeout(() => {
       killTree(child.pid);
-      reject(new Error("命令超时"));
+      finish(new Error("命令超时"));
     }, timeoutMs);
-    child.on("error", (err) => {
-      clearTimeout(timer);
-      reject(err);
-    });
+    child.on("error", (err) => finish(err));
     child.on("exit", (code) => {
-      clearTimeout(timer);
-      if (code === 0) resolve();
-      else reject(new Error(stderr.trim() || `退出码 ${code}`));
+      if (settled) return;
+      if (code === 0 || isComplete?.(output)) finish();
+      else finish(new Error(stderr.trim() || `退出码 ${code}`));
     });
   });
 }
@@ -183,10 +207,13 @@ function runProcess(command, args, opts, timeoutMs) {
 async function applyMigrations(nodeBin, stationRoot, env) {
   const wrangler = path.join(stationRoot, "node_modules", "wrangler", "bin", "wrangler.js");
   if (!fs.existsSync(wrangler)) return;
-  await runProcess(nodeBin, [wrangler, "d1", "migrations", "apply", "composer-api", "--local"], {
-    cwd: stationRoot,
-    env
-  }, 120_000);
+  await runProcess(
+    nodeBin,
+    [wrangler, "d1", "migrations", "apply", "composer-api", "--local"],
+    { cwd: stationRoot, env },
+    45_000,
+    wranglerMigrationFinished
+  );
 }
 
 function startVite(nodeBin, stationRoot, env) {

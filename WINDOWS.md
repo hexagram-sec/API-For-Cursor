@@ -14,8 +14,8 @@ npm run dist:win
 
 完成后在 `dist-win` 里会有：
 
-- `API for Cursor-0.1.0-win.zip`：便携版。解压后运行文件夹里的 `API for Cursor.exe`（不要用旧的 `*-portable.exe`，它会静默解压到临时目录，看起来像卡死）
-- `API for Cursor-0.1.0-setup.exe`：安装版（当前用户目录，开始菜单快捷方式）
+- `API for Cursor-0.1.1-win.zip`：便携版。解压后运行文件夹里的 `API for Cursor.exe`（不要用旧的 `*-portable.exe`，它会静默解压到临时目录，看起来像卡死）
+- `API for Cursor-0.1.1-setup.exe`：安装版（当前用户目录，开始菜单快捷方式）
 - `win-unpacked\API for Cursor.exe`：未压缩目录，开发机上可直接双击验证
 
 首次启动会拉起本机 Vite + Worker + SDK 桥，并打开控制台窗口。本地 D1 数据写在 `%APPDATA%\api-for-cursor\`，与安装目录分开，更新 exe 后配置还在。
